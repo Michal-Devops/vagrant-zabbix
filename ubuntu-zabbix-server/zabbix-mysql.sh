@@ -1,49 +1,41 @@
 #!/bin/bash
 
-# Aktualizacja systemu
+# Step 1: Install Zabbix repository
+sudo wget https://repo.zabbix.com/zabbix/6.3/ubuntu/pool/main/z/zabbix-release/zabbix-release_6.3-3%2Bubuntu22.04_all.deb
+sudo dpkg -i zabbix-release_6.3-3+ubuntu22.04_all.deb
 sudo apt update
-sudo apt upgrade -y
 
-# Instalacja MySQL
-sudo apt install -y mysql-server mysql-client
+# Step 2: Install Zabbix server and other components
+sudo apt install -y zabbix-server-mysql zabbix-frontend-php zabbix-apache-conf zabbix-sql-scripts zabbix-agent 
 
-# Uruchomienie i włączenie MySQL
+# Step 3: Install MySQL server
+sudo apt-get install -y mysql-server
 sudo systemctl start mysql
 sudo systemctl enable mysql
 
-# Tworzenie użytkownika i bazy danych dla Zabbix
-sudo mysql -e "CREATE USER 'zabbix'@'localhost' IDENTIFIED BY 'admin';"
-sudo mysql -e "CREATE DATABASE zabbix CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;"
-sudo mysql -e "GRANT ALL PRIVILEGES ON zabbix.* TO 'zabbix'@'localhost';"
-sudo mysql -e "FLUSH PRIVILEGES;"
+# Step 4: Create initial Zabbix database and user
+sudo mysql -e "create database zabbix character set utf8mb4 collate utf8mb4_bin;"
+sudo mysql -e "create user zabbix@localhost identified by 'zabbixPasword';"
+sudo mysql -e "grant all privileges on zabbix.* to zabbix@localhost;"
+sudo mysql -e "set global log_bin_trust_function_creators = 1;"
 
-# Instalacja repozytorium Zabbix
-wget https://repo.zabbix.com/zabbix/6.4/ubuntu/pool/main/z/zabbix-release/zabbix-release_6.4-1+ubuntu20.04_all.deb
-dpkg -i zabbix-release_6.4-1+ubuntu20.04_all.deb
-sudo apt update
 
-# Instalacja serwera Zabbix, frontendu, agenta
-sudo apt install -y zabbix-server-mysql zabbix-frontend-php zabbix-nginx-conf zabbix-sql-scripts zabbix-agent
 
-# Import schematu i danych początkowych do bazy danych Zabbix
-#zcat /usr/share/doc/zabbix-sql-scripts/mysql/create.sql.gz | mysql -u zabbix -p zabbix
-sudo zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql --default-character-set=utf8mb4 -u zabbix -p admin
-# Konfiguracja Zabbix server
-sudo sed -i 's/# DBPassword=/DBPassword=twoje_hasło/' /etc/zabbix/zabbix_server.conf
-sudo sed -i "s/# DBHost=localhost/DBHost=localhost/" /etc/zabbix/zabbix_server.conf
-sudo sed -i "s/# DBName=zabbix/DBName=zabbix/" /etc/zabbix/zabbix_server.conf
-sudo sed -i "s/# DBUser=zabbix/DBUser=zabbix/" /etc/zabbix/zabbix_server.conf
+# Step 5: Import initial schema and data for Zabbix
+echo "[client]" > /home/vagrant/.my.cnf
+echo "user=zabbix" >> /home/vagrant/.my.cnf
+echo "password=zabbixPassword" >> /home/vagrant/.my.cnf
+chmod 600 /home/vagrant/.my.cnf
 
-# Konfiguracja PHP dla frontendu Zabbix
-sudo sed -i 's/# php_value date.timezone Europe/Riga/php_value date.timezone Europe/Warsaw/' /etc/zabbix/nginx.conf
-sudo sed -i 's/# listen 80;/listen 8080;/' /etc/zabbix/nginx.conf
-sudo sed -i 's/# server_name example.com;/server_name zabbixvm;/' /etc/zabbix/nginx.conf
 
-# Konfiguracja Nginx dla Zabbix
-sudo ln -s /etc/zabbix/nginx.conf /etc/nginx/sites-enabled/zabbix.conf
-sudo nginx -t && sudo systemctl restart nginx
+sudo zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql --default-character-set=utf8mb4 -uzabbix -p'password' zabbix
 
-# Uruchomienie serwera Zabbix i agenta
-sudo systemctl restart zabbix-server zabbix-agent php7.4-fpm
-sudo systemctl enable zabbix-server zabbix-agent nginx php7.4-fpm
+# Step 6: Disable log_bin_trust_function_creators option
+sudo mysql -e "set global log_bin_trust_function_creators = 0;"
 
+# Step 7: Configure the database for Zabbix server
+sudo sed -i 's/^# DBPassword=.*/DBPassword=zabbixPassword/' /etc/zabbix/zabbix_server.conf
+
+# Step 8: Start Zabbix server and agent processes
+sudo systemctl restart zabbix-server zabbix-agent apache2
+sudo systemctl enable zabbix-server zabbix-agent apache2

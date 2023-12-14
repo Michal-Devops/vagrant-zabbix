@@ -1,0 +1,9 @@
+sudo apt update
+sudo apt install zabbix-agent
+
+sudo nano /etc/zabbix/zabbix_agentd.conf
+Server=192.168.56.10
+ServerActive=192.168.56.10
+Hostname=ubuntu
+sudo systemctl start zabbix-agent
+sudo systemctl enable zabbix-agent
